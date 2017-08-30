@@ -18,8 +18,8 @@
 
 package org.apache.solr.update;
 
-import static org.junit.internal.matchers.StringContains.containsString;
 import static org.apache.solr.update.UpdateLogTest.buildAddUpdateCommand;
+import static org.hamcrest.Matchers.containsString;
 
 import java.util.Arrays;
 import java.util.Collections;
