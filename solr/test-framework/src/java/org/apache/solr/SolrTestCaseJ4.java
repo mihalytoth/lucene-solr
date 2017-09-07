@@ -115,6 +115,7 @@ import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.servlet.DirectSolrConnection;
+import org.apache.solr.store.hdfs.HdfsLockFactory;
 import org.apache.solr.util.AbstractSolrTestCase;
 import org.apache.solr.util.LogLevel;
 import org.apache.solr.util.RandomizeSSL;
@@ -298,6 +299,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
       }
       resetFactory();
       coreName = DEFAULT_TEST_CORENAME;
+      HdfsLockFactory.INSTANCE.stopBackgroundTasks();
     } finally {
       ObjectReleaseTracker.clear();
       TestInjection.reset();

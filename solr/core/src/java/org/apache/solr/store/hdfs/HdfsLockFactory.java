@@ -63,8 +63,9 @@ public class HdfsLockFactory extends LockFactory {
 
   private SleepService sleeper;
 
-  private ScheduledExecutorService executor;
+  private volatile ScheduledExecutorService executor;
   private Consumer<Exception> exceptionHandler;
+  private final Object executorGuard = new Object();
 
   private HdfsLockFactory() {
     reset();
@@ -78,8 +79,39 @@ public class HdfsLockFactory extends LockFactory {
         throw new RuntimeException(e);
       }
     };
-    executor = Executors.newScheduledThreadPool(HDFS_LOCK_UPDATE_THREADS, new DefaultSolrThreadFactory(HDFS_LOCK_UPDATE_PREFIX));
+    executor = null;
   }
+
+  public void stopBackgroundTasks() {
+    if(executor == null)
+      return;
+    try {
+      ScheduledExecutorService executorToShutDown;
+      synchronized (executorGuard) {
+        executorToShutDown = executor;
+        executor = null;
+      }
+      executorToShutDown.shutdownNow();
+      executorToShutDown.awaitTermination(3, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private ScheduledExecutorService newExecutor() {
+    return Executors.newScheduledThreadPool(HDFS_LOCK_UPDATE_THREADS, new DefaultSolrThreadFactory(HDFS_LOCK_UPDATE_PREFIX));
+  }
+
+  private ScheduledExecutorService getExecutor() {
+    if(executor != null)
+      return executor;
+    synchronized (executorGuard) {
+      if (executor == null)
+        executor = newExecutor();
+      return executor;
+    }
+  }
+
 
   public void setExecutorService(ScheduledExecutorService executor) {
     this.executor = executor;
@@ -259,7 +291,7 @@ public class HdfsLockFactory extends LockFactory {
     }
 
     void startScheduledUpdate() {
-      scheduledFileUpdate = executor.scheduleWithFixedDelay(() -> {
+      scheduledFileUpdate = getExecutor().scheduleWithFixedDelay(() -> {
         try {
           if(lockExpired)
             reAcquireLock();
@@ -327,7 +359,7 @@ public class HdfsLockFactory extends LockFactory {
         toDelete = getMetaLock(toDelete);
       }
       log.info("Stale lock file deleted");
-      executor.schedule(this::deleteGuard, 2 * getUpdateDelay(), TimeUnit.MILLISECONDS);
+      getExecutor().schedule(this::deleteGuard, 2 * getUpdateDelay(), TimeUnit.MILLISECONDS);
     }
 
     private boolean waitUntilExpires(long lockTimeout, Path monitor) throws IOException {
